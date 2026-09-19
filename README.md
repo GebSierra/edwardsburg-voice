@@ -3,44 +3,43 @@
 This is the website that hosts The Edwardsburg Voice online. It's a set of plain files —
 no software to install, no account to log into except GitHub.
 
-## Adding next month's issue
+## Publishing a new issue
 
-1. Upload the new PDF into the `issues/` folder. Name it `YYYY-MM.pdf` — for example,
-   `2026-10.pdf` for October 2026.
-2. Open `issues.json` and add one line at the **top** of the `issues` list (newest issue
-   always goes first):
+**Upload the PDF. That's the whole job.**
 
-   ```json
-   { "id": "2026-10", "label": "October 2026", "file": "issues/2026-10.pdf" },
-   ```
+1. Open the [`issues` folder on GitHub](../../tree/main/issues) — bookmark this link.
+2. Click **Add file** → **Upload files**.
+3. Drag the PDF in and click **Commit changes**.
 
-   So the file looks like this:
+Wait a minute or two and the site updates itself. The new issue becomes the one that opens
+by default, and last month's moves into "Past issues" on its own.
 
-   ```json
-   {
-     "title": "The Edwardsburg Voice",
-     "issues": [
-       { "id": "2026-10", "label": "October 2026", "file": "issues/2026-10.pdf" },
-       { "id": "2026-09", "label": "September 2026", "file": "issues/2026-09.pdf" }
-     ]
-   }
-   ```
+You do **not** need to edit `issues.json`. It rebuilds itself from whatever PDFs are in the
+folder. Same goes for removing an issue — delete the PDF and it disappears from the site.
 
-3. Save both changes. Within a minute or two, the website updates itself automatically —
-   nothing else to do.
+### Naming the file
 
-That's it. The new issue becomes the one that opens by default; last month's issue moves
-into "Past issues" automatically.
+The filename just has to say which month it is. All of these work:
 
-## A few rules of thumb
+    2026-10.pdf
+    October 2026.pdf
+    oct-2026.pdf
+    2026-10-october-issue.pdf
 
-- **File naming always follows `YYYY-MM.pdf`.** If two issues come out in the same month,
-  add a letter: `2026-10b.pdf`.
-- **Keep each PDF under about 10MB** so it opens quickly on a phone. If a PDF is larger,
-  re-export it from whatever program made it using a "web" or "smaller file size" setting —
-  most software that makes PDFs has one.
-- **Don't rename or delete anything already in `issues.json`** unless you mean to remove
-  that issue from the site.
+If the name has no readable month in it (`scan001.pdf`, `final.pdf`), that file is ignored
+and the site carries on with the issues it already has.
+
+### One thing to watch
+
+**Keep each PDF under about 10MB** so it opens quickly on a phone. If it's bigger, re-export
+it using a "web", "reduced size", or "smaller file size" option — most programs that make
+PDFs have one.
+
+### If an issue doesn't show up
+
+Go to the **Actions** tab in the repository and look at the most recent run. It lists every
+PDF it found and names any it skipped, along with the reason. That is almost always a
+filename with no month in it.
 
 ## Changing the background photos
 

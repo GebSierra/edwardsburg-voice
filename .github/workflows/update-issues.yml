@@ -1,0 +1,40 @@
+# Publishes the paper when a PDF is uploaded.
+#
+# Adding an issue is meant to be "drag the PDF into the issues folder and commit".
+# This rebuilds issues.json from whatever is in there, so nobody has to edit JSON.
+name: Update issue list
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'issues/**'
+  workflow_dispatch:   # lets you re-run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-issues
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild issues.json from the PDFs
+        run: python3 scripts/build_issues.py
+
+      - name: Commit it if it changed
+        run: |
+          if git diff --quiet -- issues.json; then
+            echo "issues.json already up to date."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add issues.json
+          git commit -m "Update issue list [skip ci]"
+          git push
