@@ -188,24 +188,49 @@ img, svg { display: block; }
 .viewer__frame {
   position: relative;
   overflow: auto;
-  touch-action: pan-x pan-y;
+  /*
+   * At 1x we only claim vertical panning, which leaves horizontal drags for the
+   * swipe handler in app.js. Allowing pan-x here lets the browser swallow the
+   * gesture before any pointermove reaches us, which is why swipe-to-turn did
+   * nothing on a real phone while it worked with a mouse. When zoomed in we hand
+   * pan-x back so the reader can move around the page. app.js toggles is-zoomed.
+   */
+  touch-action: pan-y;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 10px;
   min-height: 40vh;
   max-height: 78vh;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  /*
+   * "safe" matters here: plain centring (or margin:auto on the child) makes the
+   * overflow on the start edge unreachable once the page is zoomed in, so you can
+   * scroll right but never reach the top-left corner of the paper. safe centring
+   * falls back to start alignment the moment the content overflows.
+   */
+  justify-content: safe center;
+  align-items: safe center;
   outline: none;
 }
+
+.viewer__frame.is-zoomed { touch-action: pan-x pan-y; }
 
 .viewer__frame:focus-visible {
   box-shadow: 0 0 0 3px var(--accent);
 }
 
+/*
+ * Both pages occupy the same grid cell, so a page turn crossfades in place
+ * instead of the two panes briefly sitting side by side in normal flow —
+ * that side-by-side moment was the "flash".
+ */
+.viewer__stage {
+  display: grid;
+  /* No auto margins — they reintroduce the unreachable-overflow problem above. */
+}
+
 .viewer__pane {
-  margin: auto;
+  grid-area: 1 / 1;
   padding: 1rem;
   will-change: transform, opacity;
 }
@@ -228,35 +253,37 @@ img, svg { display: block; }
   clip: rect(0 0 0 0);
 }
 
-/* page-turn animation classes, applied by JS */
-.pane-enter-from-right {
-  animation: pane-in-right 160ms cubic-bezier(.32,.72,0,1) both;
-}
-.pane-enter-from-left {
-  animation: pane-in-left 160ms cubic-bezier(.32,.72,0,1) both;
-}
-.pane-exit-to-left {
-  animation: pane-out-left 140ms cubic-bezier(.32,.72,0,1) both;
-}
-.pane-exit-to-right {
-  animation: pane-out-right 140ms cubic-bezier(.32,.72,0,1) both;
+/*
+ * Page turn: only the incoming page animates. It sits on top (z-index set by JS)
+ * and fades up over the outgoing page, which stays fully opaque underneath until
+ * the fade completes. Nothing ever becomes semi-transparent over the background,
+ * so there is no bright dip between pages — just a slow dissolve. The small drift
+ * keeps a sense of direction without reading as a slide.
+ */
+.pane-incoming {
+  z-index: 2;
 }
 
-@keyframes pane-in-right {
-  from { transform: translateX(24px); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
+.pane-outgoing {
+  z-index: 1;
 }
-@keyframes pane-in-left {
-  from { transform: translateX(-24px); opacity: 0; }
-  to   { transform: translateX(0);     opacity: 1; }
+
+.pane-enter-from-right {
+  animation: pane-fade-in-right 420ms cubic-bezier(.22,1,.36,1) both;
 }
-@keyframes pane-out-left {
-  from { transform: translateX(0);    opacity: 1; }
-  to   { transform: translateX(-24px); opacity: 0; }
+
+.pane-enter-from-left {
+  animation: pane-fade-in-left 420ms cubic-bezier(.22,1,.36,1) both;
 }
-@keyframes pane-out-right {
-  from { transform: translateX(0);   opacity: 1; }
-  to   { transform: translateX(24px); opacity: 0; }
+
+@keyframes pane-fade-in-right {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pane-fade-in-left {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 /* ---------- Controls ---------- */
@@ -330,8 +357,17 @@ img, svg { display: block; }
 
 .btn--reset {
   height: 44px;
-  padding: 0 1rem;
+  padding: 0 1.1rem;
 }
+
+/* Sits on its own line under the controls so it never shifts the +/- buttons. */
+.controls-reset {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+.controls-reset .btn[hidden] { display: none; }
 
 /* ---------- Divider (mural photo band) ---------- */
 .divider {

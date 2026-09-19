@@ -32,11 +32,13 @@
 <main class="viewer" id="viewer">
   <div class="viewer__frame" id="viewer-frame" tabindex="0"
        aria-label="Newspaper page viewer. Use arrow keys to turn pages, plus and minus to zoom.">
-    <div class="viewer__pane" id="pane-a">
-      <canvas class="viewer__canvas" id="canvas-a"></canvas>
-    </div>
-    <div class="viewer__pane viewer__pane--hidden" id="pane-b">
-      <canvas class="viewer__canvas" id="canvas-b"></canvas>
+    <div class="viewer__stage">
+      <div class="viewer__pane" id="pane-a">
+        <canvas class="viewer__canvas" id="canvas-a"></canvas>
+      </div>
+      <div class="viewer__pane viewer__pane--hidden" id="pane-b">
+        <canvas class="viewer__canvas" id="canvas-b"></canvas>
+      </div>
     </div>
     <div class="viewer__status" id="viewer-status" role="status" aria-live="polite"></div>
   </div>
@@ -55,8 +57,12 @@
       <button type="button" class="btn btn--icon" id="btn-zoom-out" aria-label="Zoom out">−</button>
       <span class="controls__indicator" id="zoom-indicator">100%</span>
       <button type="button" class="btn btn--icon" id="btn-zoom-in" aria-label="Zoom in">+</button>
-      <button type="button" class="btn btn--reset" id="btn-zoom-reset" aria-label="Reset zoom" hidden>Reset</button>
     </div>
+  </div>
+
+  <!-- Own row, so showing it never nudges the +/- buttons sideways. -->
+  <div class="controls-reset">
+    <button type="button" class="btn btn--reset" id="btn-zoom-reset" aria-label="Reset zoom" hidden>Reset zoom</button>
   </div>
 </main>
 

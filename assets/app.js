@@ -14,7 +14,6 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const MAX_CANVAS_PIXELS = 16_000_000; // iOS Safari fails silently above ~16.7M
 const SWIPE_THRESHOLD = 50;
-const PREFETCH_CACHE_LIMIT = 3;
 
 // ---------- DOM ----------
 const els = {
@@ -55,8 +54,6 @@ const state = {
   currentPage: 1,
   zoom: 1,
   activeSlot: 'a',         // which pane/canvas is currently visible
-  renderTasks: { a: null, b: null },
-  prefetchCache: new Map(), // page number -> { canvas, cssWidth, cssHeight }
   pdfCache: new Map(),      // issueId -> Promise<PDFDocumentProxy>
   pinch: null,               // active pinch-gesture bookkeeping, or null
   swipe: null,                // active single-pointer swipe bookkeeping, or null
@@ -100,18 +97,50 @@ function computeRenderScale(baseViewport, containerWidth, zoom) {
   return { renderScale, fitScale };
 }
 
-/** Renders `pageNum` into `canvas` at the given zoom, sized to fit `containerWidth`. */
-async function renderPageInto(pageNum, canvas, zoom, containerWidth, slot) {
+/*
+ * Every render goes through one queue, so no two page.render() calls are ever live
+ * at once. pdf.js breaks two different ways when they overlap: a second render on a
+ * busy PDFPageProxy leaves both promises unsettled forever (a frozen page turn), and
+ * a second render into a busy canvas throws "Cannot use the same canvas...". Checking
+ * for those conflicts pairwise doesn't work, because the check and the render call are
+ * separated by awaits, so two turns can both pass the check and then collide anyway.
+ * Serialising removes the race by construction.
+ */
+let renderQueue = Promise.resolve();
+let activeTask = null;
+
+function enqueueRender(job) {
+  // Cut short whatever is drawing now, so the newest request starts sooner.
+  if (activeTask) {
+    try { activeTask.cancel(); } catch { /* already finished */ }
+  }
+  const next = async () => {
+    // Let pdf.js finish releasing the canvas it was drawing into. After a cancel it
+    // rejects our promise first and frees the canvas a tick later, so starting the
+    // next render immediately trips its "same canvas" guard.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return job();
+  };
+  const result = renderQueue.then(next, next);
+  renderQueue = result.then(() => {}, () => {}); // queue survives a failed job
+  return result;
+}
+
+/**
+ * Renders `pageNum` into `canvas` at the given zoom, sized to fit `containerWidth`.
+ * Returns null if the render was cancelled or `stillWanted()` went false while queued.
+ */
+function renderPageInto(pageNum, canvas, zoom, containerWidth, stillWanted) {
+  return enqueueRender(() => drawPage(pageNum, canvas, zoom, containerWidth, stillWanted));
+}
+
+async function drawPage(pageNum, canvas, zoom, containerWidth, stillWanted) {
+  if (stillWanted && !stillWanted()) return null;
+
   const page = await state.pdfDoc.getPage(pageNum);
   const base = page.getViewport({ scale: 1 });
   const { renderScale, fitScale } = computeRenderScale(base, containerWidth, zoom);
   const viewport = page.getViewport({ scale: renderScale });
-
-  // Cancel any in-flight render on this canvas before starting a new one,
-  // otherwise rapid page turns / resizes can interleave and tear the canvas.
-  if (slot && state.renderTasks[slot]) {
-    try { state.renderTasks[slot].cancel(); } catch { /* already done */ }
-  }
 
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
@@ -122,9 +151,15 @@ async function renderPageInto(pageNum, canvas, zoom, containerWidth, slot) {
 
   const ctx = canvas.getContext('2d');
   const task = page.render({ canvasContext: ctx, viewport });
-  if (slot) state.renderTasks[slot] = task;
-  await task.promise;
-  if (slot) state.renderTasks[slot] = null;
+  activeTask = task;
+  try {
+    await task.promise;
+  } catch (err) {
+    if (err && err.name === 'RenderingCancelledException') return null;
+    throw err;
+  } finally {
+    if (activeTask === task) activeTask = null;
+  }
 
   return { cssWidth, cssHeight };
 }
@@ -153,18 +188,21 @@ function updateZoomIndicator() {
   els.btnZoomReset.hidden = state.zoom <= 1;
   els.btnZoomOut.disabled = state.zoom <= MIN_ZOOM;
   els.btnZoomIn.disabled = state.zoom >= MAX_ZOOM;
+  // Hands horizontal panning back to the browser only while zoomed in; at 1x the
+  // horizontal gesture belongs to swipe-to-turn. See the touch-action note in CSS.
+  els.frame.classList.toggle('is-zoomed', state.zoom > 1);
 }
 
 function announce(text) {
   els.status.textContent = text;
 }
 
-async function renderCurrentPage({ animateDirection = null } = {}) {
+async function renderCurrentPage({ animateDirection = null, seq = null } = {}) {
   const visibleCanvas = els.canvases[state.activeSlot];
   const width = frameContentWidth();
 
   if (!animateDirection) {
-    await renderPageInto(state.currentPage, visibleCanvas, state.zoom, width, state.activeSlot);
+    await renderPageInto(state.currentPage, visibleCanvas, state.zoom, width);
     updatePageIndicator();
     updateZoomIndicator();
     return;
@@ -177,23 +215,30 @@ async function renderCurrentPage({ animateDirection = null } = {}) {
   const toPane = els.panes[toSlot];
   const fromPane = els.panes[fromSlot];
 
-  await renderPageInto(state.currentPage, toCanvas, state.zoom, width, toSlot);
+  const rendered = await renderPageInto(
+    state.currentPage, toCanvas, state.zoom, width,
+    () => seq === null || seq === turnSeq
+  );
+  // Bail if this render was cancelled, or if a newer turn started while we drew.
+  if (!rendered || (seq !== null && seq !== turnSeq)) return;
 
+  // Only the incoming page animates: it fades up on top of the outgoing one, which
+  // stays fully opaque underneath. Neither is ever semi-transparent over the page
+  // background, so there is no bright flash between pages.
   const enterClass = animateDirection === 'next' ? 'pane-enter-from-right' : 'pane-enter-from-left';
-  const exitClass = animateDirection === 'next' ? 'pane-exit-to-left' : 'pane-exit-to-right';
 
   toPane.classList.remove('viewer__pane--hidden');
-  toPane.classList.add(enterClass);
-  fromPane.classList.add(exitClass);
+  toPane.classList.add('pane-incoming', enterClass);
+  fromPane.classList.add('pane-outgoing');
 
   await Promise.race([
     new Promise((resolve) => toPane.addEventListener('animationend', resolve, { once: true })),
-    new Promise((resolve) => setTimeout(resolve, 220)), // safety net if animations are disabled
+    new Promise((resolve) => setTimeout(resolve, 520)), // safety net if animations are disabled
   ]);
 
   fromPane.classList.add('viewer__pane--hidden');
-  fromPane.classList.remove(exitClass);
-  toPane.classList.remove(enterClass);
+  fromPane.classList.remove('pane-outgoing');
+  toPane.classList.remove('pane-incoming', enterClass);
 
   state.activeSlot = toSlot;
   els.frame.scrollTop = 0;
@@ -201,48 +246,42 @@ async function renderCurrentPage({ animateDirection = null } = {}) {
 
   updatePageIndicator();
   updateZoomIndicator();
-  schedulePrefetch();
 }
 
-function schedulePrefetch() {
-  const width = frameContentWidth();
-  const targets = [state.currentPage - 1, state.currentPage + 1].filter(
-    (p) => p >= 1 && p <= state.numPages
-  );
-  for (const p of targets) {
-    if (state.prefetchCache.has(p)) continue;
-    const offCanvas = document.createElement('canvas');
-    renderPageInto(p, offCanvas, 1, width, null)
-      .then(() => {
-        if (state.prefetchCache.size >= PREFETCH_CACHE_LIMIT) {
-          const oldestKey = state.prefetchCache.keys().next().value;
-          state.prefetchCache.delete(oldestKey);
-        }
-        state.prefetchCache.set(p, offCanvas);
-      })
-      .catch(() => { /* best-effort only */ });
-  }
-}
 
-let navLock = false;
+// Turns supersede rather than block. A lock here meant that on a big screen, where
+// rendering a tabloid page takes the better part of a second, a second swipe during
+// that window was silently thrown away. Now every gesture is accepted and the most
+// recent one wins.
+let turnSeq = 0;
 
 async function goToPage(targetPage, { pushHistory = false } = {}) {
   const clamped = Math.min(Math.max(targetPage, 1), state.numPages);
-  if (clamped === state.currentPage || navLock) return;
-  navLock = true;
+  if (clamped === state.currentPage) return;
 
+  const seq = ++turnSeq;
   const direction = clamped > state.currentPage ? 'next' : 'prev';
   state.currentPage = clamped;
   state.zoom = 1; // reset zoom on every page change, per spec
+
+  // Update the counter before the render so a swipe registers instantly, even
+  // though the page itself takes a moment to draw.
+  updatePageIndicator();
+  updateZoomIndicator();
   announce(`Loading page ${state.currentPage}`);
 
   try {
-    await renderCurrentPage({ animateDirection: direction });
-    announce(`Page ${state.currentPage} of ${state.numPages}`);
-    writeHash({ push: pushHistory });
-  } finally {
-    navLock = false;
+    await renderCurrentPage({ animateDirection: direction, seq });
+  } catch (err) {
+    if (seq === turnSeq) announce('That page could not be displayed.');
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return;
   }
+  if (seq !== turnSeq) return; // a newer turn took over while this one rendered
+
+  announce(`Page ${state.currentPage} of ${state.numPages}`);
+  writeHash({ push: pushHistory });
 }
 
 // ---------- Zoom ----------
@@ -257,32 +296,43 @@ function nearestStepIndex(zoom) {
   return closest;
 }
 
+const clamp01 = (n) => Math.min(Math.max(n, 0), 1);
+
 /**
- * Re-renders the current page at `newZoom`, keeping the point at
- * (anchorX, anchorY) — in viewport (client) coordinates — under the cursor/fingers.
+ * Re-renders the current page at `newZoom`, keeping the point under `anchor`
+ * (viewport/client coordinates) in place.
+ *
+ * Anchoring is measured against the canvas's own rect, before and after the
+ * re-render. An earlier version mixed scroll-content coordinates with canvas
+ * coordinates, which ignored the pane's padding and the centring offset — so
+ * every pinch crept down and to the right instead of zooming where you pinched.
  */
 async function setZoom(newZoom, anchor = null) {
   const clamped = Math.min(Math.max(newZoom, MIN_ZOOM), MAX_ZOOM);
   if (Math.abs(clamped - state.zoom) < 0.001) return;
 
-  const frameRect = els.frame.getBoundingClientRect();
-  const anchorX = anchor ? anchor.x - frameRect.left + els.frame.scrollLeft : els.frame.scrollLeft + els.frame.clientWidth / 2;
-  const anchorY = anchor ? anchor.y - frameRect.top + els.frame.scrollTop : els.frame.scrollTop + els.frame.clientHeight / 2;
+  const frame = els.frame;
+  const frameRect = frame.getBoundingClientRect();
+  const point = anchor || {
+    x: frameRect.left + frame.clientWidth / 2,
+    y: frameRect.top + frame.clientHeight / 2,
+  };
 
   const canvas = els.canvases[state.activeSlot];
-  const oldWidth = canvas.getBoundingClientRect().width || parseFloat(canvas.style.width) || 1;
-  const oldHeight = canvas.getBoundingClientRect().height || parseFloat(canvas.style.height) || 1;
-  const fracX = anchorX / oldWidth;
-  const fracY = anchorY / oldHeight;
+  const before = canvas.getBoundingClientRect();
+  // Where the anchor falls on the page itself, 0..1. Clamped so a pinch landing
+  // in the margin beside the page still resolves to a sensible spot on it.
+  const fracX = before.width ? clamp01((point.x - before.left) / before.width) : 0.5;
+  const fracY = before.height ? clamp01((point.y - before.top) / before.height) : 0.5;
 
   state.zoom = clamped;
-  const width = frameContentWidth();
-  const { cssWidth, cssHeight } = await renderPageInto(
-    state.currentPage, canvas, state.zoom, width, state.activeSlot
-  );
+  await renderPageInto(state.currentPage, canvas, state.zoom, frameContentWidth());
 
-  els.frame.scrollLeft = fracX * cssWidth - (anchor ? anchor.x - frameRect.left : els.frame.clientWidth / 2);
-  els.frame.scrollTop = fracY * cssHeight - (anchor ? anchor.y - frameRect.top : els.frame.clientHeight / 2);
+  // Nudge the scroll so that same spot lands back under the fingers, using real
+  // post-layout geometry rather than assuming where the canvas sits.
+  const after = canvas.getBoundingClientRect();
+  frame.scrollLeft += (after.left + fracX * after.width) - point.x;
+  frame.scrollTop += (after.top + fracY * after.height) - point.y;
 
   updateZoomIndicator();
 }
@@ -306,6 +356,9 @@ function pointerMidpoint(p1, p2) {
 }
 
 els.frame.addEventListener('pointerdown', (e) => {
+  // Capture so a swipe that travels past the edge of the frame still delivers its
+  // pointerup here. Without this a fast flick on a phone just vanishes.
+  try { els.frame.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
   if (activePointers.size === 2) {
@@ -371,18 +424,17 @@ function handleSwipeEnd(e) {
   }
 }
 
-function releasePointer(e) {
+function releasePointer(e, completed) {
+  try { els.frame.releasePointerCapture(e.pointerId); } catch { /* already gone */ }
   const hadTwo = activePointers.size === 2;
   activePointers.delete(e.pointerId);
   if (hadTwo) endPinchIfDone();
-  else handleSwipeEnd(e);
+  else if (completed) handleSwipeEnd(e);
+  else state.swipe = null; // browser took the gesture over; don't turn the page
 }
 
-els.frame.addEventListener('pointerup', releasePointer);
-els.frame.addEventListener('pointercancel', releasePointer);
-els.frame.addEventListener('pointerleave', (e) => {
-  if (activePointers.has(e.pointerId)) releasePointer(e);
-});
+els.frame.addEventListener('pointerup', (e) => releasePointer(e, true));
+els.frame.addEventListener('pointercancel', (e) => releasePointer(e, false));
 
 // Desktop: ctrl+wheel to zoom, double-click to zoom.
 els.frame.addEventListener('wheel', (e) => {
@@ -420,8 +472,7 @@ let resizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    state.prefetchCache.clear();
-    renderCurrentPage().then(schedulePrefetch);
+    renderCurrentPage();
   }, 150);
 });
 
@@ -457,7 +508,6 @@ window.addEventListener('hashchange', syncFromHash);
 
 async function openIssue(issue, { page = 1, pushHistory = true } = {}) {
   state.issueId = issue.id;
-  state.prefetchCache.clear();
   els.issueDate.textContent = issue.label;
 
   announce(`Loading ${issue.label}`);
@@ -467,13 +517,12 @@ async function openIssue(issue, { page = 1, pushHistory = true } = {}) {
   state.zoom = 1;
 
   await renderPageInto(
-    state.currentPage, els.canvases[state.activeSlot], state.zoom, frameContentWidth(), state.activeSlot
+    state.currentPage, els.canvases[state.activeSlot], state.zoom, frameContentWidth()
   );
   updatePageIndicator();
   updateZoomIndicator();
   announce(`${issue.label}, page ${state.currentPage} of ${state.numPages}`);
   writeHash({ push: pushHistory });
-  schedulePrefetch();
   renderArchive();
 }
 
@@ -568,3 +617,5 @@ async function main() {
 }
 
 main();
+
+
