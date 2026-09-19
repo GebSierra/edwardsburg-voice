@@ -19,6 +19,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 ISSUES_DIR = ROOT / "issues"
@@ -68,7 +69,10 @@ def main():
         found.append({
             "id": f"{year:04d}-{month:02d}",
             "label": f"{MONTH_NAMES[month - 1]} {year}",
-            "file": f"issues/{pdf.name}",
+            # Percent-encode the name so the site can load it whatever it's called.
+            # A space happens to survive, but a '#' would truncate the URL and a '?'
+            # would turn the rest into a query string.
+            "file": f"issues/{quote(pdf.name)}",
         })
 
     # Newest first — the site shows issues[0] as the current issue.
