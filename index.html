@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Edwardsburg Voice</title>
+<meta name="description" content="The Edwardsburg Voice — local news for Edwardsburg, read online. Hosted free for the community by Trinity Bible Church.">
+<meta property="og:title" content="The Edwardsburg Voice">
+<meta property="og:description" content="Local news for Edwardsburg — read the latest issue online.">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="hero" id="hero">
+  <div class="hero__photos" aria-hidden="true">
+    <div class="hero__photo hero__photo--a"></div>
+    <div class="hero__photo hero__photo--b"></div>
+    <div class="hero__photo hero__photo--c"></div>
+  </div>
+  <div class="hero__scrim" aria-hidden="true"></div>
+  <div class="masthead">
+    <h1 class="masthead__title">The Edwardsburg Voice</h1>
+    <p class="masthead__date" id="issue-date">&nbsp;</p>
+  </div>
+</header>
+
+<main class="viewer" id="viewer">
+  <div class="viewer__frame" id="viewer-frame" tabindex="0"
+       aria-label="Newspaper page viewer. Use arrow keys to turn pages, plus and minus to zoom.">
+    <div class="viewer__pane" id="pane-a">
+      <canvas class="viewer__canvas" id="canvas-a"></canvas>
+    </div>
+    <div class="viewer__pane viewer__pane--hidden" id="pane-b">
+      <canvas class="viewer__canvas" id="canvas-b"></canvas>
+    </div>
+    <div class="viewer__status" id="viewer-status" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="controls">
+    <div class="controls__group controls__group--nav">
+      <button type="button" class="btn btn--icon" id="btn-prev" aria-label="Previous page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="controls__indicator" id="page-indicator">Page 1 of 1</span>
+      <button type="button" class="btn btn--icon" id="btn-next" aria-label="Next page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="controls__group controls__group--zoom">
+      <button type="button" class="btn btn--icon" id="btn-zoom-out" aria-label="Zoom out">−</button>
+      <span class="controls__indicator" id="zoom-indicator">100%</span>
+      <button type="button" class="btn btn--icon" id="btn-zoom-in" aria-label="Zoom in">+</button>
+      <button type="button" class="btn btn--reset" id="btn-zoom-reset" aria-label="Reset zoom" hidden>Reset</button>
+    </div>
+  </div>
+</main>
+
+<div class="divider" id="divider" role="presentation" aria-hidden="true">
+  <div class="divider__photo"></div>
+</div>
+
+<section class="archive" aria-labelledby="archive-heading">
+  <h2 class="archive__heading" id="archive-heading">Past issues</h2>
+  <div class="archive__strip" id="archive-strip"></div>
+</section>
+
+<footer class="site-footer">
+  <p>Created and designed by Trinity Bible Church for the Edwardsburg community.</p>
+</footer>
+
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

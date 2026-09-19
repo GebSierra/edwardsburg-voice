@@ -1,0 +1,490 @@
+/* ---------- Tokens ---------- */
+:root {
+  color-scheme: light dark;
+  --ink:     light-dark(#14161a, #f2f3f5);
+  --paper:   light-dark(#fbfbf9, #101214);
+  --muted:   light-dark(#5d626b, #969ba4);
+  --rule:    light-dark(#e3e2dd, #262a30);
+  --accent:  light-dark(#9b1c1c, #f05a5a);
+  --surface: light-dark(#ffffff, #171a1e);
+
+  --font-serif: "Newsreader", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+img, svg { display: block; }
+
+/* ---------- Hero (photo band behind the masthead) ---------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: clamp(300px, 40vh, 480px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero__photos {
+  position: absolute;
+  inset: 0;
+  /* Dark base so the crossfade between two layers never flashes the page colour. */
+  background: #14110e;
+}
+
+/*
+ * Slideshow: three stacked layers on one 24s loop, each offset by 8s, so exactly
+ * one is showing at a time with a ~1.6s crossfade. Ken Burns drift is folded into
+ * the same keyframes — one animation per layer, nothing to keep in sync.
+ * To change the photos, edit the three --a/--b/--c rules below. To add a fourth,
+ * bump the cycle to 32s and add an 8s-later delay.
+ */
+.hero__photo {
+  position: absolute;
+  inset: -5%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: grayscale(22%) brightness(0.82) contrast(1.04) blur(0.6px);
+  opacity: 0;
+  animation: hero-cycle 24s linear infinite backwards;
+}
+
+.hero__photo--a {
+  background-image: url("img/welcome-sign.webp");
+  background-position: center 38%;
+  opacity: 1;            /* the one that shows if animations are off */
+  animation-delay: 0s;
+}
+
+.hero__photo--b {
+  background-image: url("img/water-tower.webp");
+  background-position: center 45%;
+  animation-delay: 8s;
+}
+
+.hero__photo--c {
+  background-image: url("img/lunkers.webp");
+  background-position: center 50%;
+  animation-delay: 16s;
+}
+
+.hero.is-paused .hero__photo { animation-play-state: paused; }
+
+/*
+ * Two jobs, kept separate on purpose: a pool of shade behind the masthead text so
+ * white type stays legible over ANY of the photos (the water tower is mostly bright
+ * sky), and a much lighter overall grade so the photos themselves still read.
+ * Darkening the whole band instead would bury everything that isn't high-contrast.
+ */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(72% 62% at 50% 46%, rgba(8,7,6,.74) 0%, rgba(8,7,6,.46) 46%, transparent 78%),
+    linear-gradient(180deg,
+      rgba(10,8,6,.44) 0%,
+      rgba(10,8,6,.20) 34%,
+      rgba(10,8,6,.30) 72%,
+      var(--paper) 100%);
+}
+
+.hero::after {
+  /* subtle print-grain texture, unifies the photo with the flat UI below it */
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+}
+
+@keyframes hero-cycle {
+  0%     { opacity: 0; transform: scale(1.04) translate3d(0, 0, 0); }
+  6.67%  { opacity: 1; }
+  33.33% { opacity: 1; }
+  40%    { opacity: 0; }
+  46%    { transform: scale(1.15) translate3d(-1.2%, -0.8%, 0); }
+  100%   { opacity: 0; transform: scale(1.04) translate3d(0, 0, 0); }
+}
+
+/* ---------- Masthead ---------- */
+.masthead {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(2rem, 6vw, 3rem) 1.25rem;
+  text-align: center;
+  animation: rise-in 700ms cubic-bezier(.16,1,.3,1) both;
+}
+
+.masthead__title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(2.25rem, 7vw, 4rem);
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem;
+  line-height: 1.05;
+  color: #fbfbf9;
+  display: inline-block;
+  padding-bottom: 0.5rem;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5), 0 4px 30px rgba(0,0,0,.6);
+}
+
+.masthead__title::after {
+  content: "";
+  display: block;
+  height: 3px;
+  width: 4.5rem;
+  margin: 0.6rem auto 0;
+  background: var(--accent);
+  animation: rule-grow 900ms 500ms cubic-bezier(.16,1,.3,1) both;
+  transform-origin: center;
+}
+
+.masthead__date {
+  margin: 0.85rem 0 0;
+  color: rgba(251,251,249,.88);
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0,0,0,.55);
+  animation: rise-in 700ms 150ms cubic-bezier(.16,1,.3,1) both;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rule-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* ---------- Viewer ---------- */
+.viewer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.25rem 1.5rem;
+  animation: rise-in 700ms 220ms cubic-bezier(.16,1,.3,1) both;
+}
+
+.viewer__frame {
+  position: relative;
+  overflow: auto;
+  touch-action: pan-x pan-y;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  min-height: 40vh;
+  max-height: 78vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  outline: none;
+}
+
+.viewer__frame:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.viewer__pane {
+  margin: auto;
+  padding: 1rem;
+  will-change: transform, opacity;
+}
+
+.viewer__pane--hidden {
+  display: none;
+}
+
+.viewer__canvas {
+  display: block;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  background: #fff;
+}
+
+.viewer__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* page-turn animation classes, applied by JS */
+.pane-enter-from-right {
+  animation: pane-in-right 160ms cubic-bezier(.32,.72,0,1) both;
+}
+.pane-enter-from-left {
+  animation: pane-in-left 160ms cubic-bezier(.32,.72,0,1) both;
+}
+.pane-exit-to-left {
+  animation: pane-out-left 140ms cubic-bezier(.32,.72,0,1) both;
+}
+.pane-exit-to-right {
+  animation: pane-out-right 140ms cubic-bezier(.32,.72,0,1) both;
+}
+
+@keyframes pane-in-right {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes pane-in-left {
+  from { transform: translateX(-24px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes pane-out-left {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(-24px); opacity: 0; }
+}
+@keyframes pane-out-right {
+  from { transform: translateX(0);   opacity: 1; }
+  to   { transform: translateX(24px); opacity: 0; }
+}
+
+/* ---------- Controls ---------- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem 2rem;
+  margin-top: 1rem;
+}
+
+.controls__group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controls__indicator {
+  min-width: 5.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  transition: border-color 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,.08);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.btn:disabled:hover { border-color: var(--rule); }
+
+.btn--icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn--icon svg { width: 20px; height: 20px; }
+
+.btn--reset {
+  height: 44px;
+  padding: 0 1rem;
+}
+
+/* ---------- Divider (mural photo band) ---------- */
+.divider {
+  position: relative;
+  height: clamp(130px, 20vw, 240px);
+  overflow: hidden;
+  opacity: 0.55;
+}
+
+.divider__photo {
+  position: absolute;
+  inset: -6%;
+  background-image: url("img/grain-elevator-mural.webp");
+  background-size: cover;
+  background-position: center 58%;
+  filter: grayscale(85%) brightness(0.95);
+  animation: divider-drift 40s ease-in-out infinite alternate;
+}
+
+/* Gradient fade top and bottom so the band melts into the page instead of ending hard. */
+.divider::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--paper) 0%, transparent 26%, transparent 74%, var(--paper) 100%);
+}
+
+.divider.is-paused .divider__photo { animation-play-state: paused; }
+
+@keyframes divider-drift {
+  from { transform: scale(1.02) translate3d(-1%, 0, 0); }
+  to   { transform: scale(1.08) translate3d(1%, 0, 0); }
+}
+
+/* ---------- Archive ---------- */
+.archive {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+.archive__heading {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.35rem;
+  margin: 0 0 1rem;
+}
+
+.archive__strip {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 0.5rem;
+}
+
+.archive__strip:empty::after {
+  content: "No past issues yet — check back next month.";
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.archive-card {
+  flex: 0 0 auto;
+  width: 140px;
+  scroll-snap-align: start;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.archive-card:hover,
+.archive-card:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.archive-card__thumb {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.archive-card__thumb canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.archive-card__label {
+  display: block;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------- Footer ---------- */
+.site-footer {
+  text-align: center;
+  padding: 1.5rem 1.25rem 2.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--rule);
+}
+
+.site-footer p { margin: 0; }
+
+/* ---------- Scroll reveal (progressive enhancement) ---------- */
+@supports (animation-timeline: view()) {
+  .archive,
+  .site-footer {
+    animation: reveal-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 25%;
+  }
+
+  .divider {
+    animation: divider-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 25%;
+  }
+
+  @keyframes reveal-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes divider-reveal {
+    from { opacity: 0; }
+    to   { opacity: 0.55; }
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 480px) {
+  .controls { gap: 0.75rem 1rem; }
+  .viewer__frame { max-height: 68vh; }
+}
