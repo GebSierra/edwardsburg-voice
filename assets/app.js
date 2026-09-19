@@ -2,7 +2,12 @@
 // Plain ES module, no build step, no framework. See README for how to add an issue.
 
 import * as pdfjsLib from '../vendor/pdfjs/pdf.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc = '../vendor/pdfjs/pdf.worker.mjs';
+
+// Resolve the worker against THIS module's URL, not the page URL. A bare relative
+// string gets resolved against pdf.js's own module location, which silently yields
+// vendor/vendor/... once the site is served from a subpath like /edwardsburg-voice/.
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  new URL('../vendor/pdfjs/pdf.worker.mjs', import.meta.url).href;
 
 const ZOOM_STEPS = [1, 1.5, 2, 3, 4];
 const MIN_ZOOM = 1;
