@@ -15,7 +15,18 @@ Wait a minute or two and the site updates itself. The new issue becomes the one 
 by default, and last month's moves into "Past issues" on its own.
 
 You do **not** need to edit `issues.json`. It rebuilds itself from whatever PDFs are in the
-folder. Same goes for removing an issue — delete the PDF and it disappears from the site.
+folder.
+
+## Removing an issue
+
+1. Open the [`issues` folder](../../tree/main/issues) and click the PDF you want gone.
+2. Click the **⋯** button at the top right of the file view, then **Delete file**.
+3. Scroll down and click **Commit changes**.
+
+The issue disappears from the site within a minute or two.
+
+**Don't rename a file to "delete"** — renaming just gives the file a new name, it doesn't
+remove it. Use the **Delete file** option above.
 
 ### Naming the file
 
