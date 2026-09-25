@@ -1,0 +1,11 @@
+# Never apply line-ending conversion to these. A PDF made by a generator can contain
+# no NUL bytes at all, so Git's "looks like text" heuristic misfires and it would
+# rewrite LF to CRLF on checkout — which corrupts the file's byte offsets.
+*.pdf   binary
+*.webp  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
